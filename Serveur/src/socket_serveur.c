@@ -37,6 +37,7 @@ void clear_clients(Client *clients, int actual)
   int i = 0;
   for(i = 0; i < actual; i++)
     {
+      destroy_joueur(&(clients[i].joueur));
       closesocket(clients[i].sock);
     }
 }

@@ -91,7 +91,7 @@ static bool aDesPionsDansSonCamp(int joueur, int *plateau) {
 
   int case_parcourue = NB_CASES/2*(joueur-1);
   while (plateau[case_parcourue] == 0
-	 && case_parcourue < NB_CASES/2*joueur)
+         && case_parcourue < NB_CASES/2*joueur)
     {
       case_parcourue++;
     }
@@ -138,12 +138,12 @@ int testFinPartie(int *plateau, int joueur, int sens_rotation, int score_joueur1
       int coup[NB_CASES/2];
       int iCoup = 0;
       if (obligerNourrir(joueur == 1 ? 2 : 1, plateau, sens_rotation, coup, &iCoup)) {
-	return 0;
+        return 0;
       }
       else {
 	
-	/* printf("La partie se termine : le joueur %d n'a plus de graines dans son camp et son adversaire ne peut pas le nourrir\n"); */
-	return joueur == 1 ? 2 : 1;
+        /* printf("La partie se termine : le joueur %d n'a plus de graines dans son camp et son adversaire ne peut pas le nourrir\n"); */
+        return joueur == 1 ? 2 : 1;
       }
       
     }
@@ -173,8 +173,8 @@ bool obligerNourrir(int joueur, int *plateau, int sens_rotation, int *coup, int 
   while (case_parcourue < NB_CASES/2*(joueur))
     {
       if (plateau[case_parcourue] < nbCasesDansLeCamp(case_parcourue, joueur, plateau, sens_rotation)) {
-	coup[*indexCoup] = case_parcourue % (NB_CASES/2);
-	(*indexCoup)++;
+        coup[*indexCoup] = case_parcourue % (NB_CASES/2);
+        (*indexCoup)++;
       }
       case_parcourue++;
     }
@@ -241,7 +241,7 @@ void jouerCoup(int case_jeu, int joueur, int *score_joueur, int sens_rotation, i
 
   //on vérifie si le joueur remporte des pions
   while (!estDansCampJoueur(joueur, case_parcourue)
-	 && (plateau[case_parcourue] == 2 || plateau[case_parcourue] == 3))
+         && (plateau[case_parcourue] == 2 || plateau[case_parcourue] == 3))
     {
       /* printf("Le joueur prend les pions : %d\n", plateau[case_parcourue]); */
       prises[*nbPrises] = plateau[case_parcourue];
@@ -256,126 +256,128 @@ void jouerCoup(int case_jeu, int joueur, int *score_joueur, int sens_rotation, i
         
       if ( ((sens_rotation == 1 && case_parcourue == NB_CASES/2 * (2-joueur))
             || (sens_rotation == 0 && case_parcourue == NB_CASES/2 * (3-joueur) - 1))
-	   && plateau[case_parcourue] == 0)
+           && plateau[case_parcourue] == 0)
         {
-	  /* printf("Au final aucune prise n'est faite  car le coup vide totalement le camp adverse\n"); */
+          /* printf("Au final aucune prise n'est faite  car le coup vide totalement le camp adverse\n"); */
 
-	  *nbPrises = -1;
-	  /* printf("Votre score actuel est : %d\n", tmp_sore_joueur); */
-	  copiePlateau(tmpPlateau, plateau);
+          *nbPrises = -1;
+          /* printf("Votre score actuel est : %d\n", tmp_sore_joueur); */
+          copiePlateau(tmpPlateau, plateau);
 
-	  *score_joueur = tmp_sore_joueur;
+          *score_joueur = tmp_sore_joueur;
         }
     }
 }
 
 
-/*******************************************************************************************************************/
-/* int main() {													   */
-/* 														   */
-/*   int plateau[NB_CASES];											   */
-/*   int score_joueur1, score_joueur2, sens_rotation;								   */
-/* 														   */
-/*   int joueur = 1;												   */
-/*   int choix;													   */
-/* 														   */
-/*   //initialisation des paramètres de la partie								   */
-/*   initPartie(plateau, &score_joueur1, &score_joueur2, &sens_rotation);					   */
-/* 														   */
-/*   bool fin = false;												   */
-/*   while (!fin) {												   */
-/* 														   */
-/*     //Demande de fin												   */
-/*     printf("Voulez-vous continuer ? (Oui:0 , Non:1)");							   */
-/*     scanf("%d", &fin);											   */
-/*     if (fin) {												   */
-/*       break;													   */
-/*     }													   */
-/* 														   */
-/* 														   */
-/*     //Affichage plateau											   */
-/*     afficherPlateau(plateau, joueur);									   */
-/* 														   */
-/*     //Obliger de nourrir ?											   */
-/*     int coup[NB_CASES / 2];											   */
-/*     int iCoup;												   */
-/*     if (obligerNourrir(joueur, plateau, sens_rotation, coup, &iCoup))					   */
-/*       {													   */
+/***************************************************************************************************************************/
+/* /										   */
+/* int main() {									   */
+/* 										   */
+/*   int plateau[NB_CASES];								   */
+/*   int score_joueur1, score_joueur2, sens_rotation;						   */
+/* 										   */
+/*   int joueur = 1;									   */
+/*   int choix;									   */
+/* 										   */
+/*   //initialisation des paramètres de la partie						   */
+/*   initPartie(plateau, &score_joueur1, &score_joueur2, &sens_rotation);				   */
+/* 										   */
+/*   bool fin = false;									   */
+/*   while (!fin) {									   */
+/* 										   */
+/*     //Demande de fin									   */
+/*     printf("Voulez-vous continuer ? (Oui:0 , Non:1)");						   */
+/*     scanf("%d", &fin);								   */
+/*     if (fin) {									   */
+/*       break;									   */
+/*     }										   */
+/* 										   */
+/* 										   */
+/*     //Affichage plateau								   */
+/*     afficherPlateau(plateau, joueur);							   */
+/* 										   */
+/*     //Obliger de nourrir ?								   */
+/*     int coup[NB_CASES / 2];								   */
+/*     int iCoup;									   */
+/*     if (obligerNourrir(joueur, plateau, sens_rotation, coup, &iCoup))				   */
+/*       {										   */
 /* 	printf("Votre adversaire est en famine, vous devez le nourrir, voici les coups possibles : \n");	   */
-/* 	for (int i = 0; i < iCoup; i++)										   */
-/* 	  {													   */
-/* 	    printf("\t%d\n", coup[i]+1);									   */
-/* 	  }													   */
-/* 														   */
-/* 	bool ok = false;											   */
-/* 	while (!ok)												   */
-/* 	  {													   */
-/* 	    printf("Quel coup ? ");										   */
-/* 	    scanf("%d", &choix);										   */
-/* 														   */
-/* 	    for (int i = 0; i < iCoup; i++)									   */
-/* 	      {													   */
-/* 		if (coup[i]+1 == choix)										   */
-/* 		  {												   */
-/* 		    ok = true;											   */
-/* 		    break;											   */
-/* 		  }												   */
-/* 	      }													   */
-/* 	  }													   */
-/* 														   */
-/*       }													   */
-/* 														   */
-/*     else													   */
-/*       {													   */
-/* 	bool ok = false;											   */
-/* 	while (!ok)												   */
-/* 	  {													   */
-/* 	    printf("Quel coup ? ");										   */
-/* 	    scanf("%d", &choix);										   */
-/* 														   */
-/* 	    if (choix >= 1 && choix <= 6)									   */
-/* 	      {													   */
-/* 		ok = true;											   */
-/* 	      }													   */
-/* 														   */
-/* 	  }													   */
-/*       }													   */
-/* 														   */
-/*     //Jouer coup												   */
+/* 	for (int i = 0; i < iCoup; i++)							   */
+/* 	  {									   */
+/* 	    printf("\t%d\n", coup[i]+1);							   */
+/* 	  }									   */
+/* 										   */
+/* 	bool ok = false;								   */
+/* 	while (!ok)									   */
+/* 	  {									   */
+/* 	    printf("Quel coup ? ");							   */
+/* 	    scanf("%d", &choix);							   */
+/* 										   */
+/* 	    for (int i = 0; i < iCoup; i++)							   */
+/* 	      {									   */
+/* 		if (coup[i]+1 == choix)							   */
+/* 		  {								   */
+/* 		    ok = true;							   */
+/* 		    break;								   */
+/* 		  }								   */
+/* 	      }									   */
+/* 	  }									   */
+/* 										   */
+/*       }										   */
+/* 										   */
+/*     else										   */
+/*       {										   */
+/* 	bool ok = false;								   */
+/* 	while (!ok)									   */
+/* 	  {									   */
+/* 	    printf("Quel coup ? ");							   */
+/* 	    scanf("%d", &choix);							   */
+/* 										   */
+/* 	    if (choix >= 1 && choix <= 6)							   */
+/* 	      {									   */
+/* 		ok = true;								   */
+/* 	      }									   */
+/* 										   */
+/* 	  }									   */
+/*       }										   */
+/* 										   */
+/*     //Jouer coup									   */
 /*     jouerCoup(choix, joueur, joueur == 1 ? &score_joueur1 : &score_joueur2, sens_rotation, plateau);		   */
-/* 														   */
-/*     //Ré-affichage du plateau										   */
-/*     afficherPlateau(plateau, joueur);									   */
-/* 														   */
-/*     //test de victoire											   */
+/* 										   */
+/*     //Ré-affichage du plateau								   */
+/*     afficherPlateau(plateau, joueur);							   */
+/* 										   */
+/*     //test de victoire								   */
 /*     int res = testFinPartie(plateau, joueur, sens_rotation, score_joueur1, score_joueur2);			   */
-/* 														   */
-/*     switch(res)												   */
-/*       {													   */
-/*       case 1:												   */
-/* 	printf("Le joueur 1 a gagne\n");									   */
-/* 	fin = true;												   */
-/* 	break;													   */
-/* 														   */
-/*       case 2:												   */
-/* 	printf("Le joueur 2 a gagne\n");									   */
-/* 	fin = true;												   */
-/* 	break;													   */
-/*       }													   */
-/* 														   */
-/*     //Changement de joueur											   */
-/*     joueur = joueur == 1 ? 2 : 1;										   */
-/* 														   */
-/*   }														   */
-/* 														   */
-/* 														   */
-/* 														   */
-/* 														   */
-/* 														   */
-/* 														   */
-/* 														   */
-/* 														   */
-/*     exit(0);													   */
-/* }														   */
-/*******************************************************************************************************************/
+/* 										   */
+/*     switch(res)									   */
+/*       {										   */
+/*       case 1:									   */
+/* 	printf("Le joueur 1 a gagne\n");							   */
+/* 	fin = true;									   */
+/* 	break;									   */
+/* 										   */
+/*       case 2:									   */
+/* 	printf("Le joueur 2 a gagne\n");							   */
+/* 	fin = true;									   */
+/* 	break;									   */
+/*       }										   */
+/* 										   */
+/*     //Changement de joueur								   */
+/*     joueur = joueur == 1 ? 2 : 1;							   */
+/* 										   */
+/*   }										   */
+/* 										   */
+/* 										   */
+/* 										   */
+/* 										   */
+/* 										   */
+/* 										   */
+/* 										   */
+/* 										   */
+/*     exit(0);									   */
+/* }										   */
+/***************************************************************************************************************************/
+
 

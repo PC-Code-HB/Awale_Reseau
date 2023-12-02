@@ -23,7 +23,7 @@ GCC := gcc
 
 # Options de compilation C
 OPTI := -O2
-DEBUG := -g -DDEBUG
+DEBUG := -g -DDEBUG -w
 COMPILEFLAGS := $(DEBUG)
 
 

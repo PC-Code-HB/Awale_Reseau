@@ -10,13 +10,19 @@
 #include <serveur.h>
 
 
+/**
+ * Paramètres passés au lancement d'un thread de jeu
+ */
 typedef struct {
   SOCKET j1;
   SOCKET j2;
-  int id;
+  int id; //index du thread dans le tableau
 } ArgThreadGame;
 
 
+/**
+ * Message pour un thread jeu
+ */
 typedef struct {
   char buffer[BUF_SIZE];
   SOCKET sock;
@@ -24,33 +30,50 @@ typedef struct {
   
 
 
-#define read_game(value) {						\
-    sem_wait(semParties + argThread->id);				\
+/**
+ * Permet de lire dans un thread jeu quand on reçoit un message d'une partie
+ * verifie que la socket correspond bien à celle du joueur passés en value
+ */
+#define read_game(value) {				\
+    sem_wait(semParties + argThread->id);			\
     while (messagesParties[argThread->id].sock != tabSock[value-1]) {	\
-      sem_wait(semParties + argThread->id);				\
-    }									\
-    strcpy(bufferGame, messagesParties[argThread->id].buffer);		\
+      sem_wait(semParties + argThread->id);			\
+    }						\
+    strcpy(bufferGame, messagesParties[argThread->id].buffer);	\
   }
 
 
-Client clients[MAX_CLIENTS]; //tableau des clients connectés
+//Tableau et nombre de clients connectés
+Client clients[MAX_CLIENTS]; 
 int nbClients = 0;
+
+//Socket serveur (sur laquelle les clients communique avec lui)
+SOCKET sock;
+
+//Buffer dans lequel on met les messages lu par sock au fur et à mesure
 char buffer[BUF_SIZE];
-SOCKET sock; //socket serveur
 
-
+//Gestion des parties
 Partie parties[NB_PARTIES];
+int clientsInGame[MAX_CLIENTS]; //=id du thread dans lequel le serveur déroule la partie du joueur i ou -1 si ne joue pas
+
+//Gestion des observateurs d'une partie
 bool observateurs[NB_PARTIES][MAX_CLIENTS];
 
+
+//Threads de parties
 pthread_t threads_partie[NB_PARTIES];
 sem_t semParties[NB_PARTIES];
 MessageGame messagesParties[NB_PARTIES];
-
-bool threadsLibres[NB_PARTIES];
-int clientsInGame[MAX_CLIENTS];
+bool threadsLibres[NB_PARTIES]; //=true si thread i inutilisé
 
 
-
+/**
+ * Accepte la connection d'un client à la socket serveur
+ * Enregistre ce nouveau client en créant le joueur associé avec le pseudo reçu
+ *
+ * En cas de pseudo déjà pris: annule la connexion
+ */
 static void connect_client(fd_set *rdfs, int *max_rdfs)
 {
   
@@ -140,6 +163,7 @@ static void deconnect_client(int i)
 
   //On met à jour les observateurs
   for (int k = 0; k < NB_PARTIES; k++) {
+    observateurs[k][i] = false;
     memmove(observateurs[k] + i, observateurs[k] + i + 1, (MAX_CLIENTS - i - 1) * sizeof(bool));
     observateurs[k][MAX_CLIENTS-1] = false;
   }
@@ -149,6 +173,10 @@ static void deconnect_client(int i)
 
 }
 
+/**
+ * Envoie au client i la liste des joueurs connectés au serveur
+ * Format : |joueur1|joueur2|
+ */
 static void get_list_joueur(int i)
 {
 
@@ -174,6 +202,10 @@ static void get_list_joueur(int i)
 		    
 }
 
+/**
+ * Envoie au client i la liste des parties en cours
+ * Format : SERV_INFO/list_parties/|partie1|partie2|
+ */
 static void get_list_parties(int i)
 {
 
@@ -188,7 +220,6 @@ static void get_list_parties(int i)
     
     to_string_partie(&(parties[k]), buffer2);
 
-    printf("%s\n", buffer2);
     strcat(buffer, buffer2);
     strcat(buffer, "|");
 		    
@@ -200,7 +231,10 @@ static void get_list_parties(int i)
 		    
 }
 
-
+/**
+ * Transmet une demande de défi à la cible choisi par le client qui a fait la demande
+ * change l'etat du client cible à 1
+ */
 static void transmettre_defi()
 {
 
@@ -222,13 +256,14 @@ static void transmettre_defi()
 
   for (int i = 0; i < nbClients; i++) {
     if (equals_joueur(temp, &(clients[i].joueur))) {
-
+      
       //Envoie de la demande
       write_client(clients[i].sock, buffer2);
 
+      usleep(5000);
+
       //Mis à jour de l'etat de la cible
       clients[i].joueur.etat = 1;
-      usleep(5000);
       update_etat_joueur(i);
       
       break;
@@ -236,12 +271,17 @@ static void transmettre_defi()
     }
   }
 
+  destroy_joueur(temp);
 
   printf("[DEFI] : demande transmise\n");
 
 }
 
 
+/**
+ * Annonce à tout le monde que le joueur i a changé d'etat
+ * Envoie son nouvel etat
+ */
 static void update_etat_joueur(int i) {
 
 
@@ -256,10 +296,15 @@ static void update_etat_joueur(int i) {
 
   send_message_to_all_clients(clients, clients[i], nbClients, buffer2, 1);
 
-  printf("[CLIENT] : update_etat_joueur : %s\n", clients[i].joueur.pseudo);
+  printf("[CLIENT] : update_etat_joueur : %s;%d\n", clients[i].joueur.pseudo, clients[i].joueur.etat);
   
 }
 
+/**
+ * Le client qui a reçu une demande de défi l'a accepté.
+ * On l'annonce donc à celui qui a fait la demande.
+ * On change l'etat de ce dernier à 2
+ */
 static void accept_defi()
 {
 
@@ -282,25 +327,34 @@ static void accept_defi()
   for (int i = 0; i < nbClients; i++) {
     if (equals_joueur(temp, &(clients[i].joueur))) {
 
+   
       //Envoie de l'acceptation
       write_client(clients[i].sock, buffer2);
 
+      usleep(5000);
+      
       //Mis à jour de l'etat de la cible
       clients[i].joueur.etat = 2;
-      usleep(5000);
       update_etat_joueur(i);
-      
+
+     
       break;
 
     }
 
   }
 
+  destroy_joueur(temp);
 
   printf("[DEFI] : defi accepte\n");
 
 }
 
+/**
+ * Le client qui a reçu une demande de défi l'a refusé.
+ * On l'annonce donc à celui qui a fait la demande.
+ * On change l'etat de ce dernier à 0.
+ */
 static void decline_defi()
 {
 
@@ -322,27 +376,37 @@ static void decline_defi()
   for (int i = 0; i < nbClients; i++) {
     if (equals_joueur(temp, &(clients[i].joueur))) {
 
-      //Envoie de la demande
+      //Envoie du refus
       write_client(clients[i].sock, buffer2);
+
+      usleep(5000);
 
       //Mis à jour de l'etat de la cible
       clients[i].joueur.etat = 0;
-      usleep(5000);
       update_etat_joueur(i);
 
+      
       
       break;
 
     }
   }
 
+  destroy_joueur(temp);
 
-  printf("[DEFI] : defi accepte\n");
+  printf("[DEFI] : defi refuse\n");
 
 }
 
 
-
+/**
+ * Après un acceptation de défi, on lance un thread de jeu pour commencer une partie de awale
+ *
+ * Recherche les 2 clients concernés par la partie.
+ * AJoute leurs sockets dans une structure ArgThreadGame
+ * Créer une partie
+ * Cherche un thread libre et le demarre avec ArgtThreadGame comme paramètre
+ */
 static void start_game()
 {
 
@@ -383,8 +447,8 @@ static void start_game()
       clientsInGame[iJ1] = i;
       clientsInGame[iJ2] = i;
 
-      parties[i].j1 = *j1;
-      parties[i].j2 = *j2;
+      parties[i].j1 = clients[iJ1].joueur;
+      parties[i].j2 = clients[iJ2].joueur;
       parties[i].nbCoups = 0;
       
       pthread_create(threads_partie + i, NULL, game, arg);
@@ -396,17 +460,19 @@ static void start_game()
     }
   }
 
+  destroy_joueur(j1);
+  destroy_joueur(j2);
   
 }
 
-static void to_string_plateau(const int *plateau, char *string) {
-  strcpy(string, "");
-  sprintf(string, "%d", plateau[0]);
-  for (int i = 1; i < NB_CASES; i++) {
-    sprintf(string, "%s;%d", string, plateau[i]);
-  }
-}
 
+/**
+ * Procedure executé quand un thread jeu se termine
+ * 
+ * Libère la mémoire alloué
+ * Met à jour les états des joueurs à 0
+ * Annonce aux observateurs que la partie est terminé
+ */
 static void end_game(void *arg) {
   ArgThreadGame *argThread = (ArgThreadGame*)arg;
 
@@ -432,6 +498,15 @@ static void end_game(void *arg) {
 
 }
 
+/**
+ * Procedure executé par le thread jeu
+ *
+ * Deroule une partie de awale en envoyant les bons messages aux bons joueurs au fur et à mesure
+ * et en recevant les choix des joueurs au bon moment.
+ * 
+ * Dès qu'un coup a été joué, envoie le plateau et les 2 scores à tous les observateurs.
+ *
+ */
 static void* game( void *arg) {
 
   //Installer la routine de nettoyage
@@ -490,10 +565,10 @@ static void* game( void *arg) {
       read_game(joueur);
 
       if (strstr(bufferGame, "PARTIE/fin") != NULL) {
-	split = strtok_r(bufferGame, ":", &saveptr);
-	split = strtok_r(NULL, ":", &saveptr);
+        split = strtok_r(bufferGame, ":", &saveptr);
+        split = strtok_r(NULL, ":", &saveptr);
 
-	fin = atoi(split) == 1 ? true : false;
+        fin = atoi(split) == 1 ? true : false;
       }
     }
     if (fin) {
@@ -520,20 +595,20 @@ static void* game( void *arg) {
     if (obligerNourrir(joueur, plateau, sens_rotation, coup, &iCoup))
       {
 
-	sprintf(bufferGame, "PARTIE/famine:%d|", iCoup);
+        sprintf(bufferGame, "PARTIE/famine:%d|", iCoup);
 	
-	for (int i = 0; i < iCoup; i++)
-	  {
-	    sprintf(bufferGame, "%s;%d", coup[i]+1);
-	  }
+        for (int i = 0; i < iCoup; i++)
+          {
+	sprintf(bufferGame, "%s;%d", bufferGame, coup[i]+1);
+          }
 
-	write_client(tabSock[joueur-1], bufferGame);
+        write_client(tabSock[joueur-1], bufferGame);
 
       }
 
     else
       {
-	write_client(tabSock[joueur-1], "PARTIE/tous_coups");
+        write_client(tabSock[joueur-1], "PARTIE/tous_coups");
       }
 
     //Attente reception coup du joueur
@@ -560,7 +635,7 @@ static void* game( void *arg) {
     strcat(bufferGame, buf2);
     for (int i = 0; i < nbClients; i++) {
       if (observateurs[argThread->id][i]) {
-	write_client(clients[i].sock, bufferGame);
+        write_client(clients[i].sock, bufferGame);
       }
     }
 
@@ -609,6 +684,11 @@ static void* game( void *arg) {
 
 /**
  * Coeur du serveur
+ *
+ * Surveille en permance la socket serveur (boucle principale)
+ * En cas de nouveau message se charge d'appeler la bonne fonction ou de communiquer le message au bon thread.
+ *
+ * Sert de dispatcher en fonction de la nature et le contenu du message reçu
  */
 static void app(void)
 {
@@ -617,176 +697,186 @@ static void app(void)
   
   int max = sock;
  
-
-  fd_set rdfs; //ensemble des descripteurs surveillés en lecture
+  //ensemble des descripteurs surveillés en lecture
+  fd_set rdfs;
 
   while(1)
     {
       int i = 0;
-      FD_ZERO(&rdfs); //vide l'ensemble
 
-      FD_SET(STDIN_FILENO, &rdfs); //ajoute le clavier (sert pour l'arret du serveur)
+      //vide l'ensemble
+      FD_ZERO(&rdfs); 
 
-      FD_SET(sock, &rdfs); //ajoute la socket serveur
+      //ajoute le clavier (sert pour l'arret du serveu)
+      FD_SET(STDIN_FILENO, &rdfs); 
+
+      //ajoute la socket serveur
+      FD_SET(sock, &rdfs); 
 
       //Ajoute la socket de chaque client
       for(i = 0; i < nbClients; i++)
-	{
-	  FD_SET(clients[i].sock, &rdfs);
-	}
+        {
+          FD_SET(clients[i].sock, &rdfs);
+        }
 
 
       if(select(max + 1, &rdfs, NULL, NULL, NULL) == -1)
-	{
-	  perror("select()");
-	  exit(errno);
-	}
+        {
+          perror("select()");
+          exit(errno);
+        }
 
       //S'il y a le clavier qui a changé
       if(FD_ISSET(STDIN_FILENO, &rdfs))
-	{
-	  //on arrete le serveur
-	  break;
-	}
+        {
+          //on arrete le serveur
+          break;
+        }
 
       //Sinon si la socket serveur a changé ( = connection d'un client)
       else if(FD_ISSET(sock, &rdfs))
-	{
-	  connect_client(&rdfs, &max);
+        {
+          connect_client(&rdfs, &max);
 	  
-	}
+        }
 
       //Sinon c'est la socket d'un client qui a changé
       else
+        {
+          int i = 0;
+          for(i = 0; i < nbClients; i++)
 	{
-	  int i = 0;
-	  for(i = 0; i < nbClients; i++)
+	  //On cherche lequel
+	  if(FD_ISSET(clients[i].sock, &rdfs))
 	    {
-	      //On cherche lequel
-	      if(FD_ISSET(clients[i].sock, &rdfs))
-		{
-		  Client client = clients[i];
+	      Client client = clients[i];
 
-		  //on lit son message
-		  int c = read_client(clients[i].sock, buffer);
+	      //on lit son message
+	      int c = read_client(clients[i].sock, buffer);
 
-		  //S'il se deconnecte et qu'il jouait
-		  if(c == 0 && clientsInGame[i] != -1)
-		    {
+	      //S'il se deconnecte et qu'il jouait
+	      if(c == 0 && clientsInGame[i] != -1)
+	        {
 
-		      int numT = clientsInGame[i];
-		      for (int j = 0; j < MAX_CLIENTS; j++) {
-			if (j != i && clientsInGame[j] == numT) {
-			  write_client(clients[j].sock, "PARTIE/abandon");
-			  break;
-			}
-		      }
-		      
-		      pthread_cancel(threads_partie[numT]);
-
-		      pthread_join(threads_partie[numT], NULL);
-		      deconnect_client(i);
-		    }
-
-		  //S'il se deconnecte sans jouer
-		  else if (c == 0) {
-		    deconnect_client(i);
-		  }
-
-		  //S'il est en train de jouer on partage son messsage au thread.
-		  else if (clientsInGame[i] != -1) {
-		    int numT = clientsInGame[i];
-		    strcpy(messagesParties[numT].buffer, buffer);
-		    messagesParties[numT].sock = clients[i].sock;
-
-		    sem_post(semParties + numT);
-		  }
-
-		  //S'il veut la liste des joueurs connectes
-		  else if (strcmp(buffer, "GET/list_joueur") == 0) {
-		    get_list_joueur(i);
-		  }
-
-		  //S'il veut la liste des parties en cours 
-		  else if (strcmp(buffer, "GET/list_parties") == 0) {
-		    get_list_parties(i);
-		  }
-
-		  //S'il veut demander un joueur en defi
-		  else if (strstr(buffer, "DEFI/new:") != NULL) {
-		    transmettre_defi();
-		    clients[i].joueur.etat = 1;
-		    usleep(5000);
-		    update_etat_joueur(i);
-		  }
-
-		  //S'il accepte le defi
-		  else if (strstr(buffer, "DEFI/accept:") != NULL) {
-
-		    char temp_buffer[BUF_SIZE];
-		    strcpy(temp_buffer, buffer);
-		    accept_defi();
-		    clients[i].joueur.etat = 2;
-		    usleep(5000);
-		    update_etat_joueur(i);
-
-		    strcpy(buffer, temp_buffer);
-
-		    start_game();
-		  }
-
-		  //S'il refuse le defi
-		  else if (strstr(buffer, "DEFI/decline:") != NULL) {
-		    decline_defi();
-		    clients[i].joueur.etat = 0;
-		    usleep(5000);
-		    update_etat_joueur(i);
-
-		  }
-
-
-		  //S'il demande à observer une partie
-		  else if (strstr(buffer, "GET/add_observer") != NULL) {
-		    clients[i].joueur.etat = 3;
-		    update_etat_joueur(i);
-
-		    char *saveptr;
-		    char *split = strtok_r(buffer, ":", &saveptr);
-		    split = strtok_r(NULL, ":", &saveptr);
-
-		    char temp[BUF_SIZE];
-		    for (int j = 0; j < NB_PARTIES; j++) {
-		      to_string_partie(parties + j, temp);
-		      if (strcmp(temp, split) == 0) {
-			observateurs[j][i] = true;
-			break;
-		      }
-		    }
-		  }
-
-		  /* //S'il arrete d'observer une partie */
-		  /* else if (strstr(buffer, "GET/remove_observer") != NULL) { */
-		  /*   clients[i].joueur.etat = 0; */
-		  /*   update_etat_joueur(i); */
-
-		  /*   char *saveptr; */
-		  /*   char *split = strtok_r(buffer, ":", &saveptr); */
-		  /*   split = strtok_r(NULL, ":", &saveptr); */
-
-		  /*   char temp[BUF_SIZE]; */
-		  /*   for (int j = 0; j < NB_PARTIES; j++) { */
-		  /*     to_string_partie(parties + j, temp); */
-		  /*     if (strcmp(temp, split) == 0) { */
-		  /* 	observateurs[j][i] = false; */
-		  /* 	break; */
-		  /*     } */
-		  /*   } */
-		  /* } */
-		    
+	          int numT = clientsInGame[i];
+	          for (int j = 0; j < MAX_CLIENTS; j++) {
+		if (j != i && clientsInGame[j] == numT) {
+		  write_client(clients[j].sock, "PARTIE/abandon");
 		  break;
 		}
+	          }
+		      
+	          pthread_cancel(threads_partie[numT]);
+
+	          pthread_join(threads_partie[numT], NULL);
+	          deconnect_client(i);
+	        }
+
+	      //S'il se deconnecte sans jouer
+	      else if (c == 0) {
+	        deconnect_client(i);
+	      }
+
+	      //S'il est en train de jouer on partage son messsage au thread.
+	      else if (clientsInGame[i] != -1) {
+	        int numT = clientsInGame[i];
+	        strcpy(messagesParties[numT].buffer, buffer);
+	        messagesParties[numT].sock = clients[i].sock;
+
+	        sem_post(semParties + numT);
+	      }
+
+	      //S'il veut la liste des joueurs connectes
+	      else if (strcmp(buffer, "GET/list_joueur") == 0) {
+	        get_list_joueur(i);
+	      }
+
+	      //S'il veut la liste des parties en cours 
+	      else if (strcmp(buffer, "GET/list_parties") == 0) {
+	        get_list_parties(i);
+	      }
+
+	      //S'il veut demander un joueur en defi
+	      else if (strstr(buffer, "DEFI/new:") != NULL) {
+	        transmettre_defi();
+	        clients[i].joueur.etat = 1;
+	        usleep(5000);
+	        update_etat_joueur(i);
+	      }
+
+	      //S'il accepte le defi
+	      else if (strstr(buffer, "DEFI/accept:") != NULL) {
+
+	        char temp_buffer[BUF_SIZE];
+	        strcpy(temp_buffer, buffer);
+	        accept_defi();
+	        clients[i].joueur.etat = 2;
+	        usleep(5000);
+	        update_etat_joueur(i);
+
+	        strcpy(buffer, temp_buffer);
+
+	        start_game();
+	      }
+
+	      //S'il refuse le defi
+	      else if (strstr(buffer, "DEFI/decline:") != NULL) {
+	        decline_defi();
+	        clients[i].joueur.etat = 0;
+	        usleep(5000);
+	        update_etat_joueur(i);
+
+	      }
+
+
+	      //S'il demande à observer une partie
+	      else if (strstr(buffer, "GET/add_observer") != NULL) {
+	        clients[i].joueur.etat = 3;
+	        update_etat_joueur(i);
+
+	        char *saveptr;
+	        char *split = strtok_r(buffer, ":", &saveptr);
+	        split = strtok_r(NULL, ":", &saveptr);
+
+	        char temp[BUF_SIZE];
+	        for (int j = 0; j < NB_PARTIES; j++) {
+	          to_string_partie(parties + j, temp);
+	          if (strcmp(temp, split) == 0) {
+		observateurs[j][i] = true;
+		break;
+	          }
+	        }
+	      }
+
+	      //S'il arrete d'observer une partie
+	      else if (strstr(buffer, "GET/remove_observer") != NULL) {
+	        clients[i].joueur.etat = 0;
+	        update_etat_joueur(i);
+
+	        char *saveptr;
+	        char *split = strtok_r(buffer, ":", &saveptr);
+	        split = strtok_r(NULL, ":", &saveptr);
+
+	        Partie p;
+	        to_object_partie(&p, split);
+
+	        for (int j = 0; j < NB_PARTIES; j++) {
+
+	          if (threadsLibres[j]) {
+		continue;
+	          }
+		      
+	          if (equals_partie(&p, parties+j)) {
+		observateurs[j][i] = false;
+		break;
+	          }
+	        }
+	      }
+		    
+	      break;
 	    }
 	}
+        }
     }
 
   clear_clients(clients, nbClients);
@@ -796,6 +886,7 @@ static void app(void)
 int main(int argc, char **argv)
 {
 
+  //Initialisation des tableaux
   for (int i = 0 ; i < NB_PARTIES; i++) {
     threadsLibres[i] = true;
     sem_init(semParties + i, 0, 0);
@@ -815,6 +906,8 @@ int main(int argc, char **argv)
   app();
 
   end();
+
+  
  
   return EXIT_SUCCESS;
 }

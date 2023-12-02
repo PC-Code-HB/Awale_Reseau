@@ -6,6 +6,7 @@
 #include <joueur.h>
 #include <awale.h>
 #include <partie.h>
+#include <plateau.h>
 
 #include <socket_serveur.h>
 
@@ -27,7 +28,6 @@ static void decline_defi();
 
 static void start_game();
 static void* game (void *arg);
-static void to_string_plateau(const int *plateau, char *string);
 static void end_game(void *arg);
 
 

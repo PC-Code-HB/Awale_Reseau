@@ -67,3 +67,10 @@ void to_object_partie(Partie *p, const char *string) {
   }
 }
 
+
+bool equals_partie(const Partie *p1, const Partie *p2) {
+
+  return equals_joueur(&(p1->j1), &(p2->j1)) && equals_joueur(&(p1->j2), &(p2->j2));
+
+}
+

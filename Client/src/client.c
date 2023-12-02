@@ -13,37 +13,43 @@
 #include <client.h>
 
 
-/* #define viderBufferScanf() {			\ */
-/*     fflush(stdout);				\ */
-/* } */
+#define viderBufferScanf() {		\
+    fflush(stdin);			\
+  }
 
-#define viderBufferScanf() {}
+/* #define viderBufferScanf() {} */
 
-Joueur joueurs[MAX_JOUEURS];
+//Liste des joueurs en lignes
+Joueur joueurs[MAX_JOUEURS]; //0 = moi
 int indexJoueurs = 0;
-sem_t *semJoueurs;
+sem_t *semJoueurs; //lock pour accès à joueurs
 
+//Socket de communication avec le serveur
 SOCKET sock;
+
+//Buffers ( 1 par thread )
 char buffer[BUF_SIZE];
 char bufferJeu[BUF_SIZE];
 char bufferMenu[BUF_SIZE];
 char bufferObserveur[BUF_SIZE];
 
-
+//Semaphores pour gérer le fil des threads
 sem_t *semDefi;
 sem_t *semGame;
 sem_t *semOKGame;
 sem_t *semListParties;
 sem_t *semObserveur;
 
-
+//Threads des differents modes
 pthread_t *thread_listening;
 pthread_t *thread_menu;
 pthread_t *thread_jeu;
 pthread_t *thread_observeur;
 
 
-
+/**
+ * Initialise le tableau des joueurs en ligne au début du programme
+ */
 static void init_list_joueur()
 {
   const char *sep = "|";
@@ -53,24 +59,27 @@ static void init_list_joueur()
 
   while (split != NULL) {
 
-     assert(indexJoueurs < MAX_JOUEURS);
+    assert(indexJoueurs < MAX_JOUEURS);
     
-     to_object_joueur(joueurs + indexJoueurs, split);
-     indexJoueurs++;
+    to_object_joueur(joueurs + indexJoueurs, split);
+    indexJoueurs++;
 
-     split = strtok_r(NULL, sep, &saveptr);
+    split = strtok_r(NULL, sep, &saveptr);
   }
   
   
 }
 
+/**
+ * Procedure execute par le thread menu
+ *
+ * Gère le menu principal avec les différentes options que peut choisir de faire le client
+ */
 static void* menu(void *arg) {
 
   int choix;
   bool fin = false;
   while (!fin) {
-
-    
 
     printf("Que souhaitez-vous faire ? \n");
 
@@ -86,8 +95,7 @@ static void* menu(void *arg) {
     bool auMoinsUn = false;
 
     switch(choix) {
-
-      //Defier qq un
+      
     case 1:
 
       
@@ -95,47 +103,46 @@ static void* menu(void *arg) {
      
       sem_wait(semJoueurs);
       for (int i = 1; i < indexJoueurs; i++) {
-	if (joueurs[i].etat == 0) {
-	  printf("\t%d. %s\n", i, joueurs[i].pseudo);
-	  auMoinsUn = true;
-	}
+        if (joueurs[i].etat == 0) {
+          printf("\t%d. %s\n", i, joueurs[i].pseudo);
+          auMoinsUn = true;
+        }
       }
       sem_post(semJoueurs);
 
       if (auMoinsUn) {
-	 printf("Choisissez le joueur à affronter parmi ceux disponibles : ");
-	 viderBufferScanf();
-	 scanf("%d", &choix);
+        printf("Choisissez le joueur à affronter parmi ceux disponibles : ");
+        viderBufferScanf();
+        scanf("%d", &choix);
       }
       else {
-	printf("Aucun joueur disponible\n");
-	break;
+        printf("Aucun joueur disponible\n");
+        break;
       }
 
       if (choix >= 1 && choix < indexJoueurs && joueurs[choix].etat == 0) {
 
-	
-	strcpy(bufferMenu, "DEFI/new:");
-	char buffer2[BUF_SIZE];
-	joueurs[choix].etat = 1;
-	to_string_joueur(joueurs + choix, buffer2);
-	strcat(bufferMenu, buffer2);
-	strcat(bufferMenu, "|");
-	joueurs[0].etat = 1;
-	to_string_joueur(joueurs, buffer2);
-	strcat(bufferMenu, buffer2);
+        strcpy(bufferMenu, "DEFI/new:");
+        char buffer2[BUF_SIZE];
+        joueurs[choix].etat = 1;
+        to_string_joueur(joueurs + choix, buffer2);
+        strcat(bufferMenu, buffer2);
+        strcat(bufferMenu, "|");
+        joueurs[0].etat = 1;
+        to_string_joueur(joueurs, buffer2);
+        strcat(bufferMenu, buffer2);
 
-	/* DEFI/new:user_defie;etat|user_qui_fait_la_demande;etat */
+        /* DEFI/new:user_defie;etat|user_qui_fait_la_demande;etat */
 	
-	write_server(sock, bufferMenu);
+        write_server(sock, bufferMenu);
       
-	printf("Un defi a ete envoye à %s. On attend sa réponse.\n", joueurs[choix].pseudo);
+        printf("Un defi a ete envoye à %s. On attend sa réponse.\n", joueurs[choix].pseudo);
 
         sem_wait(semDefi);
 
       }
       else {
-	printf("Choix incorrect, merci de recommencer\n");
+        printf("Choix incorrect, merci de recommencer\n");
       }
       
 
@@ -150,15 +157,17 @@ static void* menu(void *arg) {
       printf("Voici la liste des joueurs connectes : \n");
   
       for (int i = 0; i < indexJoueurs; i++) {
-	printf("\t%s ; %d\n", joueurs[i].pseudo, joueurs[i].etat);
+        printf("\t%s ; %d\n", joueurs[i].pseudo, joueurs[i].etat);
       }
 
       break;
 
     case 3:
 
+      //Demande de la liste
       write_server(sock, "GET/list_parties");
 
+      //Attendre la reception de la liste
       sem_wait(semListParties);
 
       char *saveptr;
@@ -169,62 +178,79 @@ static void* menu(void *arg) {
       int iter = 0;
 
       if (split != NULL) {
-	printf("Voici la liste des parties en cours : \n");
+        printf("Voici la liste des parties en cours : \n");
       }
       else {
-	printf("Aucune partie en cours\n");
+        printf("Aucune partie en cours\n");
       }
-      
+
+      //Affichage des parties
       while (split != NULL) {
-	iter++;
+        iter++;
 
-	printf("\t%d.%s\n", iter, split);
+        printf("\t%d.%s\n", iter, split);
 
-	strcpy(parties[iter-1], split);
+        strcpy(parties[iter-1], split);
 
-	split = strtok_r(NULL, "|", &saveptr);
+        split = strtok_r(NULL, "|", &saveptr);
       }
 
       while (1) {
 
-	int num = 0;
-	printf("Entrer le numero de celle que vous souhaitez regarder ou 0 pour revenir au menu principal : ");
-	scanf("%d", &num);
+        int num = 0;
+        printf("Entrer le numero de celle que vous souhaitez regarder ou 0 pour revenir au menu principal : ");
+        viderBufferScanf();
+        scanf("%d", &num);
 
 
-	if (num < 0 || num > iter) {
-	  continue;
+        if (num < 0 || num > iter) {
+          continue;
 
-	}
+        }
 
-	if (num == 0) { break; }
+        if (num == 0) { break; }
 
-	sprintf(bufferMenu, "GET/add_observer:%s", parties[num-1]);
-	write_server(sock, bufferMenu);
+        //Dire au serveur qu'on veut observer une partie
+        sprintf(bufferMenu, "GET/add_observer:%s", parties[num-1]);
+        write_server(sock, bufferMenu);
 
-	sem_wait(semJoueurs);
-	joueurs[0].etat = 3;
-	sem_post(semJoueurs);
+        sem_wait(semJoueurs);
+        joueurs[0].etat = 3;
+        sem_post(semJoueurs);
 
-	pthread_create(thread_observeur, NULL, observeur, parties[num-1]);
+        //Demarrer le thread (mode) observeur et fermer le thread menu
+        pthread_create(thread_observeur, NULL, observeur, parties[num-1]);
         pthread_cancel(*thread_menu);
 
-	break;
+        break;
 	
       }
 	
 
+      break;
+
+    default:
+
+      printf("Erreur de numero\n");
       break;
       
     }
     
   }
 
+  //Fermer la connexion avec le serveur et arreter le thread d'ecoute pour tout quitter
   write_server(sock, "");
   pthread_cancel(*thread_listening);
   
 }
 
+
+/**
+ * Procedure execute par le thread observeur
+ *
+ * Attend en boucle de recevoir le plateau et les scores des joueurs afin de les affiche
+ * S'arrête lorsque la partie se termine (= reception d'un message particulier) ou lorsque l'utilisateur tape la commande /quit
+ */
 static void* observeur(void *arg) {
 
   pthread_join(*thread_menu, NULL);
@@ -252,7 +278,7 @@ static void* observeur(void *arg) {
   while(1) {
 
 
-    //S'il y a le clavier qui a changé
+    //S'il y a le clavier qui a changé, on sort de la boucle pour arrêter le mode observeur
     int n = read(STDIN_FILENO, bufferObserveur, BUF_SIZE);
 
     if (n>0) {
@@ -262,13 +288,16 @@ static void* observeur(void *arg) {
     if (n > 0 && strcmp(bufferObserveur, "/quit\n") == 0) {
       break;
     }
+#ifdef DEBUG
     else if (n > 0) {
       printf("\n[INFO_MODE_OBSERVEUR] : commande inconnu\n");
     }
+#endif
 	
     
     sem_wait(semObserveur);
 
+    //Un tour vient d'être terminer, on l'afficher
     if (strstr(bufferObserveur, "OBS/turn") != NULL) {
 
       sscanf(bufferObserveur, "%[^:]:%d:%d:%d:%s",temp, &joueur, &score_joueur1, &score_joueur2, tempPlateau);
@@ -284,22 +313,31 @@ static void* observeur(void *arg) {
     
     }
 
+    //La partie visualisé est terminé
     else if (strstr(bufferObserveur, "OBS/terminer") != NULL) {
       printf("La partie est fini\n");
-
-      pthread_create(thread_menu, NULL, menu, NULL);
       break;
     }
 
   }
 
-  
+  //On dit qu'on observe plus la partie
+  sprintf(bufferMenu, "GET/remove_observer:%s", tempPartie);
+  write_server(sock, bufferMenu);
+
+  //On relance le menu
   fcntl(STDIN_FILENO, F_SETFL, flags);
   pthread_create(thread_menu, NULL, menu, NULL);
 
 }
 
-
+/**
+ * Procedure executé par le thread d'écoute
+ * 
+ * Surveille en boucle si la socket de communication avec le serveur change
+ * S'il y a un changment, recupère le message, l'analyse
+ * selon sa nature, le transmet au bon thread, ou effectue l'action à réaliser
+ */
 static void* listen_info_serveur(void *arg)
 {
 
@@ -317,263 +355,260 @@ static void* listen_info_serveur(void *arg)
       
       
       if(select(sock + 1, &rdfs, NULL, NULL, NULL) == -1)
-	{
-	  perror("select()");
-	  exit(errno);
-	}
+        {
+          perror("select()");
+          exit(errno);
+        }
 
       
       //Si c'est le serveur qui nous a envoyé une info
       if(FD_ISSET(sock, &rdfs))
+        {
+          int n = read_server(sock, buffer);
+
+          //Deconnexion du serveur
+          if(n == 0)
 	{
-	  int n = read_server(sock, buffer);
-
-	  //Deconnexion du serveur
-	  if(n == 0)
-	    {
-	      pthread_cancel(*thread_menu);
-	      pthread_cancel(*thread_jeu);
-	      printf("Server disconnected !\n");
+	  pthread_cancel(*thread_menu);
+	  pthread_cancel(*thread_jeu);
+	  printf("Server disconnected !\n");
 	      
-	      break;
-	    }
+	  break;
+	}
 
-	  //New joueur
-	  else if (strstr(buffer, "SERV_INFO/new_joueur") != NULL) {
+          //New joueur
+          else if (strstr(buffer, "SERV_INFO/new_joueur") != NULL) {
 
-	    char *saveptr;
-	    char *split = strtok_r(buffer, ":", &saveptr);
-	    split = strtok_r(NULL, ":", &saveptr);
+	char *saveptr;
+	char *split = strtok_r(buffer, ":", &saveptr);
+	split = strtok_r(NULL, ":", &saveptr);
 
-	    assert(indexJoueurs < MAX_JOUEURS);
-	    sem_wait(semJoueurs);
-	    to_object_joueur(joueurs + indexJoueurs, split);
-	    indexJoueurs++;
-	    sem_post(semJoueurs);
+	assert(indexJoueurs < MAX_JOUEURS);
+	sem_wait(semJoueurs);
+	to_object_joueur(joueurs + indexJoueurs, split);
+	indexJoueurs++;
+	sem_post(semJoueurs);
 
-	    #ifdef DEBUG
-	    printf("\n[SERV_INFO] : Ajout du joueur : %s\n", joueurs[indexJoueurs-1].pseudo);
-	    #endif
+#ifdef DEBUG
+	printf("\n[SERV_INFO] : Ajout du joueur : %s\n", joueurs[indexJoueurs-1].pseudo);
+#endif
 	    
+          }
+
+          //Delete joueur
+          else if (strstr(buffer, "SERV_INFO/delete_joueur") != NULL) {
+
+
+	char *saveptr;
+	char *split = strtok_r(buffer, ":", &saveptr);
+	split = strtok_r(NULL, ":", &saveptr);
+
+	Joueur joueur_temp[1];
+	joueur_temp->pseudo = NULL;
+	to_object_joueur(joueur_temp, split);
+
+
+	bool finded = false;
+	sem_wait(semJoueurs);
+	for (int i = 0; i < indexJoueurs; i++) {
+
+	  if (equals_joueur(joueur_temp, joueurs + i)) {
+
+	    swap_joueur(joueurs + indexJoueurs -1, joueurs+i);
+	    finded = true;
+	    break;
 	  }
-
-	  //Delete joueur
-	  else if (strstr(buffer, "SERV_INFO/delete_joueur") != NULL) {
-
-
-	    char *saveptr;
-	    char *split = strtok_r(buffer, ":", &saveptr);
-	    split = strtok_r(NULL, ":", &saveptr);
-
-	    Joueur joueur_temp[1];
-	    joueur_temp->pseudo = NULL;
-	    to_object_joueur(joueur_temp, split);
-
-
-	    bool finded = false;
-	    sem_wait(semJoueurs);
-	    for (int i = 0; i < indexJoueurs; i++) {
-
-	      if (equals_joueur(joueur_temp, joueurs + i)) {
-
-		swap_joueur(joueurs + indexJoueurs -1, joueurs+i);
-		finded = true;
-		break;
-	      }
 	      
-	    }
+	}
 
-	    assert(finded == true);
+	assert(finded == true);
 
-	    destroy_joueur(joueurs + indexJoueurs -1);
-	    indexJoueurs--;
+	destroy_joueur(joueurs + indexJoueurs -1);
+	indexJoueurs--;
 
-
-	    sem_post(semJoueurs);
-
-	    #ifdef DEBUG
-	    printf("\n[SERV_INFO] : Suppression du joueur : %s\n", joueur_temp->pseudo);
-	    #endif
 	    
-	  }
+	sem_post(semJoueurs);
 
-	  //Demande de defi
-	  else if (strstr(buffer, "SERV_INFO/DEFI/new") != NULL) {
+#ifdef DEBUG
+	printf("\n[SERV_INFO] : Suppression du joueur : %s\n", joueur_temp->pseudo);
+#endif
 
-	    char *saveptr;
-	    char *split = strtok_r(buffer, "|", &saveptr);
-	    split = strtok_r(NULL, "|", &saveptr);
+	destroy_joueur(joueur_temp);
+	    
+          }
+
+          //Demande de defi
+          else if (strstr(buffer, "SERV_INFO/DEFI/new") != NULL) {
+
+	char *saveptr;
+	char *split = strtok_r(buffer, "|", &saveptr);
+	split = strtok_r(NULL, "|", &saveptr);
 	
 
-	    printf("\n\nDemande de defi de la part de %s\n", split);
+	printf("\n\nDemande de defi de la part de %s\n", split);
 
-	    pthread_cancel(*thread_menu);
+	pthread_cancel(*thread_menu);
 
-	    printf("Vous accepter le défi ? Oui:1 | Non:2 -> ");
-	    int choix;
-	    viderBufferScanf();
-	    scanf("%d", &choix);
+	printf("Vous accepter le défi ? Oui:1 | Non:2 -> ");
+	int choix;
+	viderBufferScanf();
+	scanf("%d", &choix);
 
-	    if (choix != 1 && choix != 2) {
-	      choix = 2;
-	    }
+	if (choix != 1 && choix != 2) {
+	  choix = 2;
+	}
 
-	    if (choix == 1) {
+	if (choix == 1) {
 	      
-	      strcpy(buffer, "DEFI/accept:");
-	      strcat(buffer, split);
-	      strcat(buffer, "|");
+	  strcpy(buffer, "DEFI/accept:");
+	  strcat(buffer, split);
+	  strcat(buffer, "|");
 
-	      joueurs[0].etat = 2;
-	      char buffer2[BUF_SIZE];
-	      to_string_joueur(joueurs, buffer2);
-	      strcat(buffer, buffer2);
+	  joueurs[0].etat = 2;
+	  char buffer2[BUF_SIZE];
+	  to_string_joueur(joueurs, buffer2);
+	  strcat(buffer, buffer2);
 
-	      write_server(sock, buffer);
+	  write_server(sock, buffer);
 
-	      printf("Defi accepte\nLa partie COMMENCE\n\n\n");
+	  printf("Defi accepte\nLa partie COMMENCE\n\n\n");
 
-	      pthread_create(thread_jeu, NULL, jeu, NULL);
+	  pthread_create(thread_jeu, NULL, jeu, NULL);
 
-	    }
+	}
 	    
-	    else {
+	else {
 
-	      strcpy(buffer, "DEFI/decline:");
-	      strcat(buffer, split);
-	      strcat(buffer, "|");
+	  strcpy(buffer, "DEFI/decline:");
+	  strcat(buffer, split);
+	  strcat(buffer, "|");
 
-	      char buffer2[BUF_SIZE];
-	      to_string_joueur(joueurs, buffer2);
-	      strcat(buffer, buffer2);
+	  joueurs[0].etat = 0;
+	  char buffer2[BUF_SIZE];
+	  to_string_joueur(joueurs, buffer2);
+	  strcat(buffer, buffer2);
 
-	      write_server(sock, buffer);
+	  write_server(sock, buffer);
 
-	      printf("Defi refuse\nRetour au menu\n\n\n");
+	  printf("Defi refuse\nRetour au menu\n\n\n");
 
-	      pthread_create(thread_menu, NULL, menu, NULL);
+	  pthread_create(thread_menu, NULL, menu, NULL);
 
-	    }
+	}
 
-	  }
+          }
 
-	  //Acceptation de defi
-	  else if (strstr(buffer, "SERV_INFO/DEFI/accept:") != NULL) {
-	    char *saveptr;
-	    char *split = strtok_r(buffer, "|", &saveptr);
-	    split = strtok_r(NULL, "|", &saveptr);
+          //Acceptation de defi
+          else if (strstr(buffer, "SERV_INFO/DEFI/accept:") != NULL) {
+	char *saveptr;
+	char *split = strtok_r(buffer, "|", &saveptr);
+	split = strtok_r(NULL, "|", &saveptr);
 
-	    joueurs[0].etat = 2;
+	joueurs[0].etat = 2;
 	    
-	    printf("Defi à %s accepte\nDebut de la partie\n\n\n", split);
+	printf("Defi à %s accepte\nDebut de la partie\n\n\n", split);
 
-	    sem_post(semDefi);
+	sem_post(semDefi);
 
-	    pthread_cancel(*thread_menu);
-	    pthread_create(thread_jeu, NULL, jeu, NULL);
+	pthread_cancel(*thread_menu);
+	pthread_create(thread_jeu, NULL, jeu, NULL);
 
+          }
+
+          //Refus de defi
+          else if (strstr(buffer, "SERV_INFO/DEFI/decline:") != NULL) {
+	char *saveptr;
+	char *split = strtok_r(buffer, "|", &saveptr);
+	split = strtok_r(NULL, "|", &saveptr);
+
+	joueurs[0].etat = 0;
+
+	printf("Defi à %s refuse\nRetour au menu\n\n\n", split);
+
+	sem_post(semDefi);
+
+          }
+
+          //Update etat joueur
+          else if (strstr(buffer, "SERV_INFO/update_etat_joueur:") != NULL) {
+
+
+	char *saveptr;
+	char *split = strtok_r(buffer, ":", &saveptr);
+	split = strtok_r(NULL, ":", &saveptr);
+
+
+	Joueur temp[1];
+	temp->pseudo = NULL;
+	to_object_joueur(temp, split);
+
+
+	for (int i = 0; i < indexJoueurs; i++) {
+	  if (equals_joueur(temp, joueurs +i)) {
+	    joueurs[i].etat = temp->etat;
+	    break;
 	  }
+	}
 
-	  //Refus de defi
-	  else if (strstr(buffer, "SERV_INFO/DEFI/decline:") != NULL) {
-	    char *saveptr;
-	    char *split = strtok_r(buffer, "|", &saveptr);
-	    split = strtok_r(NULL, "|", &saveptr);
-
-	    joueurs[0].etat = 0;
-
-	    printf("Defi à %s refuse\nRetour au menu\n\n\n", split);
-
-	    sem_post(semDefi);
-
-	  }
-
-	  //Update etat joueur
-	  else if (strstr(buffer, "SERV_INFO/update_etat_joueur:") != NULL) {
-
-
-	    char *saveptr;
-	    char *split = strtok_r(buffer, ":", &saveptr);
-	    split = strtok_r(NULL, ":", &saveptr);
-
-
-	    Joueur temp[1];
-	    temp->pseudo = NULL;
-	    to_object_joueur(temp, split);
-
-
-	    for (int i = 0; i < indexJoueurs; i++) {
-	      if (equals_joueur(temp, joueurs +i)) {
-		joueurs[i].etat = temp->etat;
-		break;
-	      }
-	    }
-
-	    #ifdef DEBUG
-	    printf("\n[SERV_INFO]: Update etat du joueur : %s;%d\n", temp->pseudo, temp->etat);
-	    #endif
-
-
-	  }
-
-	  //PARTIE en cours
-	  else if (strstr(buffer, "PARTIE/") != NULL) {
-
-	    sem_wait(semOKGame);
-
-	    strcpy(bufferJeu, buffer);
 	    
-	    sem_post(semGame);
 
-	  }
+#ifdef DEBUG
+	printf("\n[SERV_INFO]: Update etat du joueur : %s;%d\n", temp->pseudo, temp->etat);
+#endif
 
-	  //OBS en cours
-	  else if (strstr(buffer, "OBS/") != NULL) {
+	destroy_joueur(temp);
 
-	    strcpy(bufferObserveur, buffer);
+
+          }
+
+          //PARTIE en cours
+          else if (strstr(buffer, "PARTIE/") != NULL) {
+
+	sem_wait(semOKGame);
+
+	strcpy(bufferJeu, buffer);
 	    
-	    sem_post(semObserveur);
+	sem_post(semGame);
 
-	  }
+          }
 
-	  //Reception liste partie
-	  else if (strstr(buffer, "SERV_INFO/list_parties")!= NULL) {
+          //OBS en cours
+          else if (strstr(buffer, "OBS/") != NULL) {
 
-	    char *saveptr;
-	    char *split = strtok_r(buffer, "/", &saveptr);
-	    split = strtok_r(NULL, "/", &saveptr);
-	    split = strtok_r(NULL, "/", &saveptr);
+	strcpy(bufferObserveur, buffer);
+	    
+	sem_post(semObserveur);
 
-	    strcpy(bufferMenu, split);
+          }
 
-	    sem_post(semListParties);
+          //Reception liste partie
+          else if (strstr(buffer, "SERV_INFO/list_parties")!= NULL) {
 
-	  }
+	char *saveptr;
+	char *split = strtok_r(buffer, "/", &saveptr);
+	split = strtok_r(NULL, "/", &saveptr);
+	split = strtok_r(NULL, "/", &saveptr);
+
+	strcpy(bufferMenu, split);
+
+	sem_post(semListParties);
+
+          }
  	  
 	  
-	}
+        }
     }
 
       
 
 }
 
-
-static void to_object_plateau(int *plateau, char *string) {
-
-  char *saveptr;
-  char *split = strtok_r(string, ";", &saveptr);
-
-  int i = 0;
-  while (split != NULL && i < NB_CASES) {
-    plateau[i] = atoi(split);
-
-    split = strtok_r(NULL, ";", &saveptr);
-    i++;
-  }
-  
-}
-
+/**
+ * Procedure execute par le thread de jeu
+ *
+ * Déroule une partie de awale
+ * Des que le thread d'ecoute, nous transmet un message de PARTIE, on analye et fait l'action demander par le serveur
+ */
 static void* jeu(void *arg) {
 
   usleep(100000);
@@ -597,9 +632,9 @@ static void* jeu(void *arg) {
 
       numJoueur = atoi(split);
 
-      #ifdef DEBUG
+#ifdef DEBUG
       printf("\n[PARTIE] : Attribution du numero de joueur : %d\n", numJoueur);
-      #endif
+#endif
       
     }
 
@@ -622,19 +657,19 @@ static void* jeu(void *arg) {
 
       int fin = -1;
       while (fin != 0 && fin != 1) {
-	printf("Voulez-vous continuer ? (Oui:0 , Non:1)");
-	viderBufferScanf();
-	scanf("%d", &fin);
+        printf("Voulez-vous continuer ? (Oui:0 , Non:1)");
+        viderBufferScanf();
+        scanf("%d", &fin);
       }
 
       if (fin == 1) {
-	sem_wait(semJoueurs);
-	joueurs[0].etat = 0;
-	sem_post(semJoueurs);
+        sem_wait(semJoueurs);
+        joueurs[0].etat = 0;
+        sem_post(semJoueurs);
 
-	printf("\nVous avez abandonné la partie\n");
+        printf("\nVous avez abandonné la partie\n");
 	
-	end = true;
+        end = true;
       }
 
       sprintf(bufferJeu, "PARTIE/fin:%d", fin);
@@ -664,32 +699,32 @@ static void* jeu(void *arg) {
       split = strtok_r(NULL, ":|;", &saveptr);
       printf("Votre adversaire est en famine, vous devez jouer un de ces coups pour le nourrir : \n");
       while (split != NULL && i < nbCoup) {
-	coup[i] = atoi(split);
+        coup[i] = atoi(split);
 
-	printf("\t%d\n", coup[i]);
+        printf("\t%d\n", coup[i]);
 
-	split = strtok_r(NULL, ":|;", &saveptr);
-	i++;
+        split = strtok_r(NULL, ":|;", &saveptr);
+        i++;
 
       }
 
       bool ok = false;
       int choix;
       while (!ok)
+        {
+          printf("Quel coup ? ");
+          viderBufferScanf();
+          scanf("%d", &choix);
+          
+          for (int i = 0; i < nbCoup; i++)
 	{
-	  printf("Quel coup ? ");
-	  viderBufferScanf();
-	  scanf("%d", &choix);
-
-	  for (int i = 0; i < nbCoup; i++)
+	  if (coup[i]+1 == choix)
 	    {
-	      if (coup[i]+1 == choix)
-		{
-		  ok = true;
-		  break;
-		}
+	      ok = true;
+	      break;
 	    }
 	}
+        }
 
       sprintf(bufferJeu, "PARTIE/coup:%d", choix);
       write_server(sock, bufferJeu);
@@ -702,17 +737,17 @@ static void* jeu(void *arg) {
       bool ok = false;
       int choix;
       while (!ok)
+        {
+          printf("Quel coup ? ");
+          viderBufferScanf();
+          scanf("%d", &choix);
+
+          if (choix >= 1 && choix <= 6)
 	{
-	  printf("Quel coup ? ");
-	  viderBufferScanf();
-	  scanf("%d", &choix);
-
-	  if (choix >= 1 && choix <= 6)
-	    {
-	      ok = true;
-	    }
-
+	  ok = true;
 	}
+
+        }
 
       sprintf(bufferJeu, "PARTIE/coup:%d", choix);
       write_server(sock, bufferJeu);
@@ -727,9 +762,9 @@ static void* jeu(void *arg) {
       int res = atoi(split);
 
       if (res == numJoueur) {
-	printf("Vous avez GAGNE !!!\n");
+        printf("Vous avez GAGNE !!!\n");
       } else {
-	printf("Vous avez PERDU...\n");
+        printf("Vous avez PERDU...\n");
       }
 
       split = strtok_r(NULL, ":|", &saveptr);
@@ -770,45 +805,45 @@ static void* jeu(void *arg) {
       int prises[NB_CASES];
       
       if (nbPrises > 0) {
-	split = strtok_r(NULL, ":|;", &saveptr);
+        split = strtok_r(NULL, ":|;", &saveptr);
 
-	int indexPrises = 0;
-	while (split != NULL) {
-	  prises[indexPrises] = atoi(split);
-	  indexPrises++;
+        int indexPrises = 0;
+        while (split != NULL) {
+          prises[indexPrises] = atoi(split);
+          indexPrises++;
 
-	  split = strtok_r(NULL, ":|;", &saveptr);
-	}
+          split = strtok_r(NULL, ":|;", &saveptr);
+        }
 
       }
       
       //coup du joueur
       if (numJoueur == coupJoueur) {
-	if (nbPrises == 0) {
-	  printf("Vous n'avez fait de prises avec ce coup\n");
-	}
-	else if (nbPrises == -1) {
-	  printf("Au final aucune prise n'est faite  car le coup vide totalement le camp adverse\n");
-	}
-	else {
-	  for (int i = 0; i < nbPrises; i++) {
-	    printf("Vous avez pris : %d\n", prises[i]);
-	  }
-	}
+        if (nbPrises == 0) {
+          printf("Vous n'avez fait de prises avec ce coup\n");
+        }
+        else if (nbPrises == -1) {
+          printf("Au final aucune prise n'est faite  car le coup vide totalement le camp adverse\n");
+        }
+        else {
+          for (int i = 0; i < nbPrises; i++) {
+	printf("Vous avez pris : %d\n", prises[i]);
+          }
+        }
       }
       //coup de l'adversaire
       else {
-	if (nbPrises == 0) {
-	  printf("Votre adversaire n'a pas fait de prises avec son coup\n");
-	}
-	else if (nbPrises == -1) {
-	  printf("Au final aucune prise n'a été faite par votre adversaire car cela vidait totalement votre camp\n");
-	}
-	else {
-	  for (int i = 0; i < nbPrises; i++) {
-	    printf("On vous a pris : %d\n", prises[i]);
-	  }
-	}
+        if (nbPrises == 0) {
+          printf("Votre adversaire n'a pas fait de prises avec son coup\n");
+        }
+        else if (nbPrises == -1) {
+          printf("Au final aucune prise n'a été faite par votre adversaire car cela vidait totalement votre camp\n");
+        }
+        else {
+          for (int i = 0; i < nbPrises; i++) {
+	printf("On vous a pris : %d\n", prises[i]);
+          }
+        }
       }
       
     }
@@ -826,6 +861,12 @@ static void* jeu(void *arg) {
 
 /**
  * Coeur d'un client
+ *
+ * Se connecte au serveur et recupère la liste des joueurs déjà en ligne
+ *
+ * Initialise tous les semaphores et thread du programme
+ * Demarre le thread menu et d'ecoute
+ * Attend que le thread d'ecoute se termine avant de libérer toutes les ressources
  */
 static void app(const char *address, const char *name)
 {
@@ -940,6 +981,10 @@ int main(int argc, char **argv)
   app(argv[1], argv[2]);
 
   end();
+
+  for (int i = 0; i < indexJoueurs; i++) {
+    destroy_joueur(joueurs +i);
+  }
 
   return EXIT_SUCCESS;
 }

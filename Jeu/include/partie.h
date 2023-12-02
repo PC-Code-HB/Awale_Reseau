@@ -21,6 +21,7 @@ void to_string_partie(const Partie *p, char *string);
 void to_object_partie(Partie *p, const char *string);
 
 
+bool equals_partie(const Partie *p1, const Partie *p2);
 
 
 #endif
