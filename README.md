@@ -17,6 +17,7 @@ L'application est intéractif et est guidé par un menu. A chaque étape, on vou
 ### Subtilités
 - Il est possible qu'à certains moments le traitement et l'application de messages reçus par le client du serveur soient bloqués tant que vous n'avez pas répondu ou fait un choix à la question posée. C'est une pourquoi une fois répondu plusieurs actions se produisent à la suite. Cela ne gêne en rien le bon fonctionnement de l'application mais peut être un point négatif pour l'expérience utilisateur.
 - Lorsque l'on observe une partie, on peut quitter avant la fin en saisissant la commande "/quit". Un fois entré, l'effet n'est pas immédiat, il faut d'abord que la partie est évolué encore une fois (coup joué, fin, etc), pour être pris en compte.
+- Lorsque vous jouez une partie, votre camp est la ligne du bas du plateau, le sens de rotation est celui anti-horaire et les coups possibles vont de 1 à 6 (1 à gauche, 6 à droite).
 
 ## Fonctionnalités implémantés
 
