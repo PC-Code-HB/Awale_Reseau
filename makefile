@@ -24,7 +24,7 @@ GCC := gcc
 # Options de compilation C
 OPTI := -O2
 DEBUG := -g -DDEBUG -w
-COMPILEFLAGS := $(DEBUG)
+COMPILEFLAGS := $(OPTI)
 
 
 # Headers à inclure
@@ -33,10 +33,13 @@ INCLUDES := -I$(CLIENT_DIR)/include -I$(SERVEUR_DIR)/include -I$(JEU_DIR)/includ
 
 
 # Options pour l'édition des liens
-LDFLAGS := -lm -lpthread 
+LDFLAGS := -lpthread 
 
 
 all: $(CLIENT_EXEC) $(SERVEUR_EXEC)
+
+debug: COMPILEFLAGS = $(DEBUG)
+debug: $(CLIENT_EXEC) $(SERVEUR_EXEC)
 
 $(CLIENT_EXEC): $(CLIENT_OBJS) $(JEU_OBJS)
 	@echo 'Linking object files : $^'
@@ -87,16 +90,17 @@ clean:
 
 
 #Spécification
-$(CLIENT_DIR)/obj/client.o : $(CLIENT_DIR)/include/client.h $(CLIENT_DIR)/include/socket_client.h $(JEU_DIR)/include/joueur.h
+$(CLIENT_DIR)/obj/client.o : $(CLIENT_DIR)/include/client.h $(CLIENT_DIR)/include/socket_client.h $(JEU_DIR)/include/joueur.h $(JEU_DIR)/include/awale.h $(JEU_DIR)/include/partie.h $(JEU_DIR)/include/plateau.h
 $(CLIENT_DIR)/obj/socket_client.o : $(CLIENT_DIR)/include/socket_client.h
 
 
 $(SERVEUR_DIR)/obj/socket_serveur.o : $(SERVEUR_DIR)/include/socket_serveur.h $(JEU_DIR)/include/joueur.h
-$(SERVEUR_DIR)/obj/serveur.o : $(SERVEUR_DIR)/include/serveur.h $(SERVEUR_DIR)/include/socket_serveur.h $(JEU_DIR)/include/joueur.h
+$(SERVEUR_DIR)/obj/serveur.o : $(SERVEUR_DIR)/include/serveur.h $(SERVEUR_DIR)/include/socket_serveur.h $(JEU_DIR)/include/joueur.h $(JEU_DIR)/include/awale.h $(JEU_DIR)/include/partie.h $(JEU_DIR)/include/plateau.h
 
 $(JEU_DIR)/obj/joueur.o : $(JEU_DIR)/include/joueur.h
 $(JEU_DIR)/obj/awale.o : $(JEU_DIR)/include/awale.h
-$(JEU_DIR)/obj/partie.o : $(JEU_DIR)/include/partie.h
+$(JEU_DIR)/obj/partie.o : $(JEU_DIR)/include/partie.h $(JEU_DIR)/include/joueur.h
+$(JEU_DIR)/obj/plateau.o : $(JEU_DIR)/include/plateau.h $(JEU_DIR)/include/awale.h
 
 
 
