@@ -574,6 +574,7 @@ static void* game( void *arg) {
     if (fin) {
 
       write_client(tabSock[oppose-1], "PARTIE/abandon");
+      usleep(5000);
       
       break;
     }

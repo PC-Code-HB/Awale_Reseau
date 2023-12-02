@@ -157,7 +157,7 @@ static void* menu(void *arg) {
       printf("Voici la liste des joueurs connectes : \n");
   
       for (int i = 0; i < indexJoueurs; i++) {
-        printf("\t%s ; %d\n", joueurs[i].pseudo, joueurs[i].etat);
+        printf("\t%s\n", joueurs[i].pseudo);
       }
 
       break;
@@ -185,10 +185,16 @@ static void* menu(void *arg) {
       }
 
       //Affichage des parties
+      char tempJ1[BUF_SIZE];
+      char tempJ2[BUF_SIZE];
+      char tempReste[BUF_SIZE];
+      int tempEtat;
       while (split != NULL) {
         iter++;
 
-        printf("\t%d.%s\n", iter, split);
+        sscanf(split, "%[^;];%d-%[^;];%s", tempJ1, &tempEtat, tempJ2, tempReste);
+
+        printf("\t%d.Partie entre %s et %s\n", iter, tempJ1, tempJ2);
 
         strcpy(parties[iter-1], split);
 
@@ -440,12 +446,15 @@ static void* listen_info_serveur(void *arg)
           //Demande de defi
           else if (strstr(buffer, "SERV_INFO/DEFI/new") != NULL) {
 
+	
+            Joueur jTemp[1];
+	jTemp->pseudo = NULL;
 	char *saveptr;
 	char *split = strtok_r(buffer, "|", &saveptr);
 	split = strtok_r(NULL, "|", &saveptr);
 	
-
-	printf("\n\nDemande de defi de la part de %s\n", split);
+	to_object_joueur(jTemp, split);
+	printf("\n\nDemande de defi de la part de %s\n", jTemp->pseudo);
 
 	pthread_cancel(*thread_menu);
 
@@ -461,6 +470,7 @@ static void* listen_info_serveur(void *arg)
 	if (choix == 1) {
 	      
 	  strcpy(buffer, "DEFI/accept:");
+	  to_string_joueur(jTemp, split);
 	  strcat(buffer, split);
 	  strcat(buffer, "|");
 
@@ -480,6 +490,7 @@ static void* listen_info_serveur(void *arg)
 	else {
 
 	  strcpy(buffer, "DEFI/decline:");
+	  to_string_joueur(jTemp, split);
 	  strcat(buffer, split);
 	  strcat(buffer, "|");
 
@@ -496,6 +507,8 @@ static void* listen_info_serveur(void *arg)
 
 	}
 
+	destroy_joueur(jTemp);
+
           }
 
           //Acceptation de defi
@@ -505,8 +518,12 @@ static void* listen_info_serveur(void *arg)
 	split = strtok_r(NULL, "|", &saveptr);
 
 	joueurs[0].etat = 2;
-	    
-	printf("Defi à %s accepte\nDebut de la partie\n\n\n", split);
+
+	Joueur jTemp[0];
+	jTemp->pseudo = NULL;
+	to_object_joueur(jTemp, split);
+	printf("Defi à %s accepte\nDebut de la partie\n\n\n", jTemp->pseudo);
+	destroy_joueur(jTemp);
 
 	sem_post(semDefi);
 
@@ -523,7 +540,11 @@ static void* listen_info_serveur(void *arg)
 
 	joueurs[0].etat = 0;
 
-	printf("Defi à %s refuse\nRetour au menu\n\n\n", split);
+	Joueur jTemp[0];
+	jTemp->pseudo = NULL;
+	to_object_joueur(jTemp, split);
+	printf("Defi à %s refuse\nRetour au menu\n\n\n", jTemp->pseudo);
+	destroy_joueur(jTemp);
 
 	sem_post(semDefi);
 
@@ -657,7 +678,7 @@ static void* jeu(void *arg) {
 
       int fin = -1;
       while (fin != 0 && fin != 1) {
-        printf("Voulez-vous continuer ? (Oui:0 , Non:1)");
+        printf("Voulez-vous continuer ? (Oui:0 , Non:1) ");
         viderBufferScanf();
         scanf("%d", &fin);
       }
